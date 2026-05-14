@@ -30,16 +30,18 @@ void raytracer::ARay::computeObjects(raytracer::Type renderDistance, const std::
     raytracer::Chunk chunk;
     std::unordered_set<IObject*> seen;
     seen.reserve(objects.size());
+    std::pair<float, const raytracer::Face*> hit = {std::numeric_limits<float>::max(), nullptr};
 
     // Reset
-    this->_objects.clear();
-    this->_objects.reserve(objects.size());
+    this->_hits.clear();
+    this->_hits.reserve(objects.size());
     if (objects.size() == 0) return;
 
     // Get every object other than *.obj
     for (raytracer::IObject* object: objects) {
         if (object->getObjectDescriptor().faces.size() == 0) {
-            this->_objects.push_back(object);
+            hit = object->willCollide(cframe.position, cframe.orientation);
+            this->_hits.push_back({object, hit.first, hit.second});
             seen.insert(object);
         }
     }
@@ -53,8 +55,9 @@ void raytracer::ARay::computeObjects(raytracer::Type renderDistance, const std::
         if (it != objectsChunks.end()) {
             for (raytracer::IObject* object: it->second) {
                 if (!seen.insert(object).second) continue;
-                if (!object->willColide(cframe.position, cframe.orientation)) continue; // Check if it will collide in the future at least one
-                this->_objects.push_back(object);
+                hit = object->willCollide(cframe.position, cframe.orientation);
+                if (!hit.second) continue; // Check if it will collide in the future at least once
+                this->_hits.push_back({object, hit.first, hit.second});
             }
         }
         if (seen.size() == objects.size()) return;

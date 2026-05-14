@@ -34,9 +34,8 @@ class Sphere: public raytracer::AObject {
     public:
         // ---------- Pre-Function -------- //
         void parse(const libconfig::Setting& node) final;
-        std::pair<float, const raytracer::Face*> computeSDF(const raytracer::Coord& point) const final;
+        std::pair<float, const raytracer::Face*> willCollide(const raytracer::Coord& point, const raytracer::Direction& orientation) const final;
         raytracer::Direction computeHit(const raytracer::Coord& point, const raytracer::Face* face) const final;
-        bool willColide(const raytracer::Coord& point, const raytracer::Direction& orientation) const final;
 
         // ------------ Operator ---------- //
         Sphere& operator=(const Sphere& object) = delete;

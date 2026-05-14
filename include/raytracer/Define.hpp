@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 13/05/2026 by @author Tsukini
+##  @date 14/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Define.hpp
@@ -17,16 +17,15 @@ File Description:
     /* DEFINE */
 
     /* limits */
-    #define RENDER_DISTANCE 400 // Kill the ray if the SDF is above or equal to that value (can be redefined in the camera)
+    #define RENDER_DISTANCE 400 // Kill the ray if the ray position is above or equal to that value (can be redefined in the camera)
     #define MAX_LIGHT_RAY 1000000 // Max number of rays by light
     #define LIGHT_INTENSITY_LIMIT 1e-5 // Kill the ray under this intensity
     #define CAMERA_COEF_LIMIT 1e-5 // Kill the ray under this coef
-    #define SDF_COLLINDING_LIMIT 1e-2 // Detect colliding if the SDF is below or equal to that value
     #define LIGHT_COLOR_LIMIT 4.0f // Radius of the circle to take color on a shape pixel hit point
     #define MAX_VERTICES 3 // Allow point, segment, triangle
     #define LOAD_FACTOR 0.5f // Load factor used for the unordered map
-    #define SPACE_CHUNK_SIZE 50.0f // Size of the chunk used (color, face, sdf)
-    #define COLOR_CHUNK_SIZE (LIGHT_COLOR_LIMIT * 2.5) // Size of the chunk used (color, face, sdf)
+    #define SPACE_CHUNK_SIZE 50.0f // Size of the chunk used (color, face, collide)
+    #define COLOR_CHUNK_SIZE (LIGHT_COLOR_LIMIT * 2.5) // Size of the chunk used (color, face, collide)
     #define RAY_MAX_USELESS_LOOP(renderDistance) (renderDistance / SPACE_CHUNK_SIZE) // Number of useless loop allowed before getting killed
     #define RAY_MAX_DEPTH 25 // Depth maximal of cloning for the rays
     #define MAX_STEP 3 // Number of adv max step
@@ -35,6 +34,7 @@ File Description:
     #define UNIT_METER_COEF 50.0f // Number of local unit that equal to a meter
 
     /* values */
+    #define COLLISION_COUNTER_COEF 1e-2 // Coef used to counter collision on the same object for reflection
     #define ADV_SIZE 75 // Size of the advencement display
     #define NO_LIGHT_DEFAULT 2.5f // Allow the incrementation of light even if the value of r, g or b is at 0
     #define RAY_DISTANCE_COEF 2.0f // Coef of the render distance for the distance live of a ray
@@ -44,6 +44,7 @@ File Description:
     #define MOVE_SPEED 10.0f
     #define ROTATE_SPEED 2.5f
     #define ORIENTATION_SPEED 0.05f
+    #define EPSILON (std::numeric_limits<float>::epsilon())
 
     /* default */
     #define PLUGINS_PATH "./plugins/"

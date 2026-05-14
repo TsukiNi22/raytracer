@@ -30,7 +30,7 @@ class IRay: public raytracer::AObject {
         virtual void* clone(void) = 0;
         virtual void reset(void) = 0; // Reset ray values
         virtual void computeObjects(raytracer::Type renderDistance, const std::vector<raytracer::IObject*>& objects, const std::unordered_map<raytracer::Chunk, std::vector<raytracer::IObject*>, raytracer::ChunkHash>& objectsChunks) = 0;
-        virtual const std::vector<raytracer::IObject*>& getObjects(void) const = 0;
+        virtual const std::vector<std::tuple<raytracer::IObject*, raytracer::Type, const raytracer::Face*>>& getHits(void) const = 0;
         virtual void kill(void) = 0;
         virtual bool isAlive(void) const = 0;
         virtual void addDistance(raytracer::Type distance) = 0;

@@ -47,7 +47,7 @@ class AObject: public raytracer::IObject {
 
         /* 3D logic */
         void reflectRay(raytracer::IRay* ray, const raytracer::Face* face) const final;
-        std::pair<float, const raytracer::Face*> computeSDF(const raytracer::Coord& point) const override;
+        std::pair<float, const raytracer::Face*> willCollide(const raytracer::Coord& point, const raytracer::Direction& orientation) const override;
         raytracer::Direction computeHit(const raytracer::Coord& point, const raytracer::Face* face) const override;
 
         /* color handling */
@@ -58,7 +58,6 @@ class AObject: public raytracer::IObject {
         /* 3D logic */
         hot inline void setImmunity(raytracer::IObject* object) final {this->_immunity = object;};
         hot inline nodiscard raytracer::IObject* getImmunity(void) const final {return this->_immunity;};
-        hot inline nodiscard bool willColide(unused const raytracer::Coord& point, unused const raytracer::Direction& orientation) const override {return true;};
 
         /* movement */
         hot inline void translate(const raytracer::Coord& v) final {this->_descriptor.cframe.position += v;};

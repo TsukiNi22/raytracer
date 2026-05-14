@@ -43,11 +43,10 @@ class IObject {
 
         /* 3D logic */
         virtual void reflectRay(raytracer::IRay* ray, const raytracer::Face* face) const = 0;
-        virtual std::pair<float, const raytracer::Face*> computeSDF(const raytracer::Coord& point) const = 0;
+        virtual std::pair<float, const raytracer::Face*> willCollide(const raytracer::Coord& point, const raytracer::Direction& orientation) const = 0;
         virtual raytracer::Coord computeHit(const raytracer::Coord& point, const raytracer::Face* face = nullptr) const = 0;
         virtual void setImmunity(raytracer::IObject* object) = 0;
         virtual raytracer::IObject* getImmunity(void) const = 0;
-        virtual bool willColide(const raytracer::Coord& point, const raytracer::Direction& orientation) const = 0;
 
         /* movement */
         virtual void translate(const raytracer::Coord& v) = 0;

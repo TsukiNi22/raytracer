@@ -30,7 +30,7 @@ namespace raytracer { // namespace start
 class ARay: public raytracer::IRay {
     protected:
         bool _alive = true;
-        std::vector<raytracer::IObject*> _objects; // Future object that will be probably hit
+        std::vector<std::tuple<raytracer::IObject*, raytracer::Type, const raytracer::Face*>> _hits;
         raytracer::Type _distance; // Distance traveled
 
     public:
@@ -39,7 +39,7 @@ class ARay: public raytracer::IRay {
         void computeObjects(raytracer::Type renderDistance, const std::vector<raytracer::IObject*>& objects, const std::unordered_map<raytracer::Chunk, std::vector<raytracer::IObject*>, raytracer::ChunkHash>& objectsChunks); // Call on init & each direction changement
 
         // ------------ Function ---------- //
-        nodiscard const std::vector<raytracer::IObject*>& getObjects(void) const {return this->_objects;};
+        nodiscard const std::vector<std::tuple<raytracer::IObject*, raytracer::Type, const raytracer::Face*>>& getHits(void) const final {return this->_hits;};
         void kill(void) final {this->_alive = false;};
         nodiscard bool isAlive(void) const final {return this->_alive;};
         void addDistance(raytracer::Type distance) final {this->_distance += distance;};

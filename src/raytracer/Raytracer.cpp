@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 13/05/2026 by @author Tsukini
+##  @date 14/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Raytracer.cpp
@@ -258,7 +258,7 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
     const raytracer::Face* faceHit = nullptr;
     raytracer::Direction orientation;
     raytracer::Angle angle = 0.0;
-    float sdf = 0.0;
+    float t = 0.0f;
 
     // Check depth
     if (depth > RAY_MAX_DEPTH) return;
@@ -266,7 +266,6 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
     for (std::size_t i = start; i < end; ++i) {
         raytracer::LightRay* ray = rays[i];
         distanceUnit = ray->getCFrame().orientation.length();
-        ray->computeObjects(camera->getRenderDistance(), objects, objectsChunks);
         while (ray->isAlive()) {
             // Kill those with no direction
             if (ray->getCFrame().orientation <= 1e-8 && ray->getCFrame().orientation >= -1e-8) {
@@ -274,30 +273,32 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
                 continue;
             }
 
-            // 1 - Compute SDF
-            sdf = 0.0f;
+            // Update the different hits
+            ray->computeObjects(camera->getRenderDistance(), objects, objectsChunks);
+
+            // 1 - Compute T
+            t = 0.0f;
             faceHit = nullptr;
             nearestObject = nullptr;
-            for (raytracer::IObject* object: ray->getObjects()) {
+            for (const auto &[object, actualT, face]: ray->getHits()) {
                 //if (ray->getImmunity() == object) continue;
-                auto [actualSDF, face] = object->computeSDF(ray->getCFrame().position);
-                if (!nearestObject || actualSDF < sdf) {
-                    sdf = actualSDF;
+                if (!nearestObject || actualT < t) {
+                    t = actualT;
                     faceHit = face;
                     nearestObject = object;
                 }
             }
-            if (!nearestObject) {
+            if (!nearestObject) { // No valid T
                 ray->kill();
                 continue;
             }
 
-            // 2 - Apply SDF (aproximative gravity curve, only in newton mode)
-            ray->translate(ray->getCFrame().orientation * sdf);
-            ray->addDistance(distanceUnit * sdf);
+            // 2 - Apply T (aproximative gravity curve, only in newton mode)
+            ray->translate(ray->getCFrame().orientation * t);
+            ray->addDistance(distanceUnit * t);
 
             // Kill conditions
-            if (std::isnan(sdf) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
+            if (std::isnan(t) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
                 ray->kill();
                 continue;
             } else if (ray->getDistance() >= camera->getRenderDistance() * RAY_DISTANCE_COEF) { // Live distance
@@ -308,8 +309,8 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
                 continue;
             }
 
-            // 3 - Check SDF
-            if (ray->getImmunity() != nearestObject && sdf > -SDF_COLLINDING_LIMIT && sdf < SDF_COLLINDING_LIMIT) { // Collision
+            // 3 - Check T
+            if (ray->getImmunity() != nearestObject) { // Collision
                 material = nearestObject->getObjectDescriptor().material;
                 // Transparency & Refraction
                 if (material->getTransparency() > 1e-8) {
@@ -328,23 +329,15 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
                 ray->setIntensity(ray->getIntensity() * material->getReflection());
                 ray->setColor(raytracer::mergeColor(material->getColor(), ray->getColor(), ray->getIntensity()));
 
-                // Only if the light will be alive after
-                if (ray->getIntensity() > LIGHT_INTENSITY_LIMIT) {
-                    ray->computeObjects(camera->getRenderDistance(), objects, objectsChunks);
-
-                    // To counter collision with the same object on the next iteration
-                    ray->translate(ray->getCFrame().orientation * SDF_COLLINDING_LIMIT * 2);
-                    ray->setImmunity(nearestObject);
-                }
-            } else if (ray->getImmunity() == nearestObject && sdf > -SDF_COLLINDING_LIMIT && sdf < SDF_COLLINDING_LIMIT) { // Collision on the other side
-                nearestObject->addLightData(ray->getCFrame().position, ray->getColor(), ray->getLuminescence());
-
                 // To counter collision with the same object on the next iteration
-                ray->translate(ray->getCFrame().orientation * SDF_COLLINDING_LIMIT * 2);
+                ray->translate(ray->getCFrame().orientation * COLLISION_COUNTER_COEF);
+                ray->setImmunity(nearestObject);
+            } else { // Collision on the other side
+                nearestObject->addLightData(ray->getCFrame().position, ray->getColor(), ray->getLuminescence());
             }
 
             // Kill conditions
-            if (std::isnan(sdf) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
+            if (std::isnan(t) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
                 ray->kill();
             } else if (ray->getDistance() >= camera->getRenderDistance() * RAY_DISTANCE_COEF) { // Live distance
                 ray->kill();
@@ -377,11 +370,10 @@ static hot void processCameraChunk(raytracer::Raytracer& raytracer,
     raytracer::Type distanceUnit = 0.0;
     const raytracer::IMaterial* material = nullptr;
     const raytracer::Face* faceHit = nullptr;
-    float sdf = 0.0;
+    float t = 0.0f;
 
     for (std::size_t i = start; i < end; ++i) {
         raytracer::Ray* ray = rays[i];
-        ray->computeObjects(camera->getRenderDistance(), objects, objectsChunks);
         distanceUnit = ray->getCFrame().orientation.length();
         while (ray->isAlive()) {
             // Kill those with no direction
@@ -390,31 +382,33 @@ static hot void processCameraChunk(raytracer::Raytracer& raytracer,
                 continue;
             }
 
-            // 1 - Compute SDF
-            sdf = 0.0f;
+            // Update the different hits
+            ray->computeObjects(camera->getRenderDistance(), objects, objectsChunks);
+
+            // 1 - Compute T
+            t = 0.0f;
             faceHit = nullptr;
             nearestObject = nullptr;
-            for (raytracer::IObject* object: ray->getObjects()) {
+            for (const auto &[object, actualT, face]: ray->getHits()) {
                 if (ray->getImmunity() == object) continue;
-                auto [actualSDF, face] = object->computeSDF(ray->getCFrame().position);
-                if (!nearestObject || actualSDF < sdf) {
-                    sdf = actualSDF;
+                if (!nearestObject || actualT < t) {
+                    t = actualT;
                     faceHit = face;
                     nearestObject = object;
                 }
             }
-            if (!nearestObject) { // No valid SDF
+            if (!nearestObject) { // No valid T
                 ray->setColor(raytracer::mergeColor(ray->getColor(), sky.getColor(), ray->getCoef()));
                 ray->kill();
                 continue;
             }
 
-            // 2 - Apply SDF (aproximative gravity curve, only in newton mode)
-            ray->translate(ray->getCFrame().orientation * sdf);
-            ray->addDistance(distanceUnit * sdf);
+            // 2 - Apply T (aproximative gravity curve, only in newton mode)
+            ray->translate(ray->getCFrame().orientation * t);
+            ray->addDistance(distanceUnit * t);
 
             // Kill conditions
-            if (std::isnan(sdf) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
+            if (std::isnan(t) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
                 ray->setColor(raytracer::mergeColor(ray->getColor(), sky.getColor(), ray->getCoef()));
                 ray->kill();
                 continue;
@@ -426,55 +420,47 @@ static hot void processCameraChunk(raytracer::Raytracer& raytracer,
                 continue;
             }
 
-            // 3 - Check SDF
-            if (sdf > -SDF_COLLINDING_LIMIT && sdf < SDF_COLLINDING_LIMIT) {
-                material = nearestObject->getObjectDescriptor().material;
-                // Transparency & Refraction
-                if (material->getTransparency() > 1e-8) {
-                    raysClones.push_back(static_cast<raytracer::Ray*>(ray->clone()));
-                    raysClones.back()->setImmunity(nearestObject);
-                    raysClones.back()->setCoef(raysClones.back()->getCoef() * material->getTransparency() * (1.0f - material->getReflection()));
-                    raysClones.back()->setColor(raytracer::mergeColor(material->getColor(), raysClones.back()->getColor(), raysClones.back()->getCoef()));
-                }
-
-                // Normal computing
-                float d = (ray->getCFrame().position - ray->getCFrameOrigin().position).length() / camera->getRenderDistance();
-                float localIntensityCoef = std::exp(-EXP_K * d * d * d * d);
-                auto [pointColor, ok] = nearestObject->getPointColor(ray->getCFrame().position);
-                color = pointColor;
-
-                // Apply the global light modifier
-                if (globalLightCount > 0 && !ok) color = raytracer::mergeColor(color, raytracer::mergeLight(material->getColor(), globalLightColor, globalLightCount));
-                else if (globalLightCount > 0) color = raytracer::moyColor(color, raytracer::mergeLight(material->getColor(), globalLightColor, globalLightCount));
-
-                // Generate the noise
-                if (material->hasNoise()) {
-                    auto [strength, size] = material->getNoiseSettings();
-                    raytracer::noise(ray->getCFrame().position - nearestObject->getCFrame().position, color, strength, size);
-                }
-
-                // Set the color
-                color = raytracer::mergeColor(ray->getColor(), color, ray->getCoef() * localIntensityCoef);
-                ray->setColor(color);
-
-                // Update coef
-                ray->setCoef(ray->getCoef() * material->getReflection());
-
-                // Only if the camera will be alive after
-                if (ray->getCoef() > CAMERA_COEF_LIMIT) {
-                    // Apply the reflection
-                    nearestObject->reflectRay(ray, faceHit);
-                    ray->computeObjects(camera->getRenderDistance(), objects, objectsChunks);
-
-                    // To counter collision with the same object on the next iteration
-                    ray->translate(ray->getCFrame().orientation * SDF_COLLINDING_LIMIT * 2);
-                    ray->setImmunity(nearestObject);
-                }
-                
+            // 3 - Check T
+            material = nearestObject->getObjectDescriptor().material;
+            // Transparency & Refraction
+            if (material->getTransparency() > 1e-8) {
+                raysClones.push_back(static_cast<raytracer::Ray*>(ray->clone()));
+                raysClones.back()->setImmunity(nearestObject);
+                raysClones.back()->setCoef(raysClones.back()->getCoef() * material->getTransparency() * (1.0f - material->getReflection()));
+                raysClones.back()->setColor(raytracer::mergeColor(material->getColor(), raysClones.back()->getColor(), raysClones.back()->getCoef()));
             }
 
+            // Normal computing
+            float d = (ray->getCFrame().position - ray->getCFrameOrigin().position).length() / camera->getRenderDistance();
+            float localIntensityCoef = std::exp(-EXP_K * d * d * d * d);
+            auto [pointColor, ok] = nearestObject->getPointColor(ray->getCFrame().position);
+            color = pointColor;
+
+            // Apply the global light modifier
+            if (globalLightCount > 0 && !ok) color = raytracer::mergeColor(color, raytracer::mergeLight(material->getColor(), globalLightColor, globalLightCount));
+            else if (globalLightCount > 0) color = raytracer::moyColor(color, raytracer::mergeLight(material->getColor(), globalLightColor, globalLightCount));
+
+            // Generate the noise
+            if (material->hasNoise()) {
+                auto [strength, size] = material->getNoiseSettings();
+                raytracer::noise(ray->getCFrame().position - nearestObject->getCFrame().position, color, strength, size);
+            }
+
+            // Set the color
+            color = raytracer::mergeColor(ray->getColor(), color, ray->getCoef() * localIntensityCoef);
+            ray->setColor(color);
+
+            // Update coef
+            ray->setCoef(ray->getCoef() * material->getReflection());
+
+            // Apply the reflection
+            nearestObject->reflectRay(ray, faceHit);
+
+            // To counter collision with the same object on the next iteration
+            ray->setImmunity(nearestObject);
+
             // Kill conditions
-            if (std::isnan(sdf) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
+            if (std::isnan(t) || (ray->getCFrame().position - camera->getCFrame().position).lengthSquared() >= camera->getRenderDistance() * camera->getRenderDistance()) { // Too far
                 ray->setColor(raytracer::mergeColor(ray->getColor(), sky.getColor(), ray->getCoef()));
                 ray->kill();
             } else if (ray->getDistance() >= camera->getRenderDistance() * RAY_DISTANCE_COEF) { // Live distance
@@ -497,16 +483,16 @@ static hot void processCameraChunk(raytracer::Raytracer& raytracer,
 /*
  1 - Reset rays (lights)
  2 - Compute lights rays
-    1 - Compute SDF
-    2 - Apply SDF (and aproximative gravity curve, only in newton mode)
-    3 - Check SDF
+    1 - Compute T
+    2 - Apply T (and aproximative gravity curve, only in newton mode)
+    3 - Check
+    too low intensity -> kill
+    too far -> kill
     collision ->
         - Reflect
         - Reduce intensity
         - Apply color fusion
         - Add light rays data (hit point, intensity, color) to the object
-    too low intensity -> kill
-    too far -> kill
 */
 void raytracer::Raytracer::light(void)
 {
@@ -563,9 +549,11 @@ void raytracer::Raytracer::light(void)
  1 - Reset rays (camera)
  2.0 - Check for already computed ray
  2 - Compute camera rays
-    1 - Compute SDF
-    2 - Apply SDF (and aproximative gravity curve, only in newton mode)
-    3 - Check SDF
+    1 - Compute T
+    2 - Apply T (and aproximative gravity curve, only in newton mode)
+    3 - Check
+    too low intensity -> kill
+    too far -> kill
     collision ->
         - Reflect
         - Reduce intensity

@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 12/05/2026 by @author Tsukini
+##  @date 14/05/2026 by @author Tsukini
 
 File Name:
 ##  @file AObject.hpp
@@ -24,6 +24,8 @@ File Description:
 #include <algorithm>
 #include <exception>
 #include <iostream>
+#include <optional>
+#include <cmath>
 
 static void processChunk(const std::vector<raytracer::ChunkLightData>& data,
     const raytracer::Coord& point, raytracer::FColor& lightColor,
@@ -128,7 +130,7 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
     raytracer::Coord worldUp = {0, 1, 0};
     if (std::abs(forward.dot(worldUp)) > 0.999) worldUp = {1, 0, 0}; // Edge case, parrallel
     raytracer::Coord right = (worldUp.cross(forward)).normalize();
-    raytracer::Coord up = forward.cross(right);
+    raytracer::Coord up = forward.cross(right).normalize();
 
     // Get the file content
     const auto& attrib = reader.GetAttrib();
@@ -159,6 +161,9 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
                 vertice.x = rotated.x + descriptor.cframe.position.x;
                 vertice.y = rotated.y + descriptor.cframe.position.y;
                 vertice.z = rotated.z + descriptor.cframe.position.z;
+                vertice.x += descriptor.cframe.position.x;
+                vertice.y += descriptor.cframe.position.y;
+                vertice.z += descriptor.cframe.position.z;
 
                 // Min & Max
                 if (v == 0) {
@@ -203,160 +208,83 @@ hot void raytracer::AObject::reflectRay(raytracer::IRay* ray, const raytracer::F
     ray->setCFrame(cframe, false);
 }
 
-hot static float segmentSDF(const raytracer::Coord& p, const raytracer::Vertice& a, const raytracer::Vertice& b)
+hot static nodiscard std::optional<float> segmentCollide(const raytracer::Coord& point, const raytracer::Direction& orientation, const raytracer::Vertice& a, const raytracer::Vertice& b)
 {
-    raytracer::Coord pa = p - a, ba = b - a;
-    raytracer::Type h = pa.dot(ba) / ba.dot(ba);
-    h = (h < static_cast<raytracer::Type>(0)) ? static_cast<raytracer::Type>(0) : (h > static_cast<raytracer::Type>(1) ? static_cast<raytracer::Type>(1) : h);
-    return (pa - ba * h).lengthSquared();
+    raytracer::Direction ab = b - a;
+    raytracer::Direction ap = a - point;
+    float ab2 = ab.lengthSquared();
+    float denom = orientation.lengthSquared() * ab2 - std::pow(orientation.dot(ab), 2);
+    if (denom < EPSILON) return std::nullopt;
+    float t = (ap.dot(orientation) * ab2 - ap.dot(ab) * orientation.dot(ab)) / denom;
+    float u = (ap.dot(orientation) * orientation.dot(ab) - ap.dot(ab) * orientation.lengthSquared()) / denom;
+    if (t >= 0.0f && u >= 0.0f && u <= 1.0f) return t;
+    return std::nullopt;
 }
 
-/*
-hot static float triangleSDF(const raytracer::Coord& p, const raytracer::Vertice& a, const raytracer::Vertice& b, const raytracer::Vertice& c)
+hot static nodiscard std::optional<float> triangleCollide(const raytracer::Coord& point, const raytracer::Direction& orientation, const raytracer::Vertice& a, const raytracer::Vertice& b, const raytracer::Vertice& c)
+/*{
+    raytracer::Direction edge1 = b - a;
+    raytracer::Direction edge2 = c - a;
+    raytracer::Direction h = orientation.cross(edge2);
+    float det = edge1.dot(h);
+    if (det > -EPSILON && det < EPSILON) return std::nullopt;
+    float invDet = 1.0f / det;
+    raytracer::Direction s = point - a;
+    float u = invDet * s.dot(h);
+    if (u < 0.0f || u > 1.0f) return std::nullopt;
+    raytracer::Direction q = s.cross(edge1);
+    float v = invDet * orientation.dot(q);
+    if (v < 0.0f || (u + v) > 1.0f) return std::nullopt;
+    float t = invDet * edge2.dot(q);
+    if (t > EPSILON) return t;
+    return std::nullopt;
+}*/
 {
-    raytracer::Coord ab = b - a;
-    raytracer::Coord ac = c - a;
-    raytracer::Coord ap = point - a;
-
-    // normale du triangle
-    raytracer::Coord n = ab.cross(ac);
-    raytracer::Type nLen2 = n.dot(n);
-
-    // Invalid triangle
-    if (nLen2 == 0.0) {
-        return std::min({
-            segmentSDF(point, a, b),
-            segmentSDF(point, b, c),
-            segmentSDF(point, c, a)
-        });
-    }
-
-    // Project the point on the triangle
-    raytracer::Type distPlane = ap.dot(n);
-    raytracer::Coord proj = point - n * (distPlane / nLen2);
-
-    // Check if the point is inside
-    raytracer::Coord bp = proj - b;
-    raytracer::Coord cp = proj - c;
-
-    raytracer::Coord bc = c - b;
-    raytracer::Coord ca = a - c;
-
-    // Edge case, same orientation
-    if ((ab.cross(proj - a)).dot(n) >= 0
-        && (bc.cross(bp)).dot(n) >= 0
-        && (ca.cross(cp)).dot(n) >= 0)
-        return (distPlane * distPlane) / nLen2;
-
-    // Edge case, on side
-    return std::min({
-        segmentSDF(point, a, b),
-        segmentSDF(point, b, c),
-        segmentSDF(point, c, a)
-    });
-}
-*/
-
-hot static float triangleSDF(const raytracer::Coord& p, const raytracer::Vertice& a, const raytracer::Vertice& b, const raytracer::Vertice& c)
-{
-    // edges
-    const float abx = b.x - a.x;
-    const float aby = b.y - a.y;
-    const float abz = b.z - a.z;
-
-    const float acx = c.x - a.x;
-    const float acy = c.y - a.y;
-    const float acz = c.z - a.z;
-
-    // normal = ab x ac
-    const float nx = aby*acz - abz*acy;
-    const float ny = abz*acx - abx*acz;
-    const float nz = abx*acy - aby*acx;
-
-    const float nLen2 = nx*nx + ny*ny + nz*nz;
-
-    // degenerate triangle
-    if (nLen2 < 1e-12f) {
-        float d0 = segmentSDF(p, a, b);
-        float d1 = segmentSDF(p, b, c);
-        float d2 = segmentSDF(p, c, a);
-        return std::min(d0, std::min(d1, d2));
-    }
-
-    // ap
-    const float apx = p.x - a.x;
-    const float apy = p.y - a.y;
-    const float apz = p.z - a.z;
-
-    // distance to plane
-    const float distPlane = apx*nx + apy*ny + apz*nz;
-
-    // projection
-    const float invN = 1.0f / nLen2;
-
-    const float projx = p.x - nx * distPlane * invN;
-    const float projy = p.y - ny * distPlane * invN;
-    const float projz = p.z - nz * distPlane * invN;
-
-    // edge tests
-    auto edgeTest = [&](const raytracer::Vertice& v0, const raytracer::Vertice& v1, float px, float py, float pz)
-    {
-        const float ex = v1.x - v0.x;
-        const float ey = v1.y - v0.y;
-        const float ez = v1.z - v0.z;
-
-        const float vx = px - v0.x;
-        const float vy = py - v0.y;
-        const float vz = pz - v0.z;
-
-        const float cx = ey*vz - ez*vy;
-        const float cy = ez*vx - ex*vz;
-        const float cz = ex*vy - ey*vx;
-
-        return (cx*nx + cy*ny + cz*nz) >= 0.f;
-    };
-
-    if (edgeTest(a, b, projx, projy, projz) &&
-        edgeTest(b, c, projx, projy, projz) &&
-        edgeTest(c, a, projx, projy, projz)) {
-        return (distPlane * distPlane) * invN;
-    }
-
-    // fallback edges
-    float d0 = segmentSDF(p, a, b);
-    float d1 = segmentSDF(p, b, c);
-    float d2 = segmentSDF(p, c, a);
-
-    return std::min(d0, std::min(d1, d2));
+    raytracer::Direction edge1 = b - a;
+    raytracer::Direction edge2 = c - a;
+    //const raytracer::Direction normal = edge1.cross(edge2);
+	//if (normal.dot(orientation) > 0) return std::nullopt;
+    raytracer::Direction ray_cross_e2 = orientation.cross(edge2);
+    float det = edge1.dot(ray_cross_e2);
+    if (std::abs(det) < EPSILON) return std::nullopt;
+    float inv_det = 1.0 / det;
+    raytracer::Direction s = point - a;
+    float u = inv_det * s.dot(ray_cross_e2);
+    if (u < -EPSILON || u - 1 > EPSILON) return std::nullopt;
+    raytracer::Direction s_cross_e1 = s.cross(edge1);
+    float v = inv_det * orientation.dot(s_cross_e1);
+    if (v < -EPSILON || u + v - 1 > EPSILON) return std::nullopt;
+    float t = inv_det * edge2.dot(s_cross_e1);
+    if (t > EPSILON) return t;
+    return std::nullopt;
 }
 
-hot std::pair<float, const raytracer::Face*> raytracer::AObject::computeSDF(const raytracer::Coord& point) const
+hot nodiscard std::pair<float, const raytracer::Face*> raytracer::AObject::willCollide(const raytracer::Coord& point, const raytracer::Direction& orientation) const
 {
-    float sdf = std::numeric_limits<float>::max(), dist = 0.0f;
-    const raytracer::Face* sdfFace = nullptr;
+    float t = std::numeric_limits<float>::max();
+    const raytracer::Face* tface = nullptr;
 
     // For each face
     for (const raytracer::Face& face: this->getObjectDescriptor().faces) {
+        std::optional<float> dist;
         // Dispatch the computing
         switch (face.size()) {
-            case 1: dist = (point - face[0]).lengthSquared();               break;
-            case 2: dist = segmentSDF(point, face[0], face[1]);             break;
-            case 3: dist = triangleSDF(point, face[0], face[1], face[2]);   break;
+            case 1: dist = std::nullopt; break;
+            case 2: dist = segmentCollide(point, orientation, face[0], face[1]); break;
+            case 3: dist = triangleCollide(point, orientation, face[0], face[1], face[2]); break;
             default:
                 throw utils::exception::CustomException(utils::exception::Error, utils::exception::Code::Parser, "Invalid number of vertices for a face on the object to render");
         }
-
-        // Check the distance
-        if (dist < sdf) {
-            sdf = dist;
-            sdfFace = &face;
+        if (dist && *dist < t) {
+            t = *dist;
+            tface = &face;
         }
     }
 
-    return {std::sqrt(sdf), sdfFace};
+    return {t, tface};
 }
 
-hot static raytracer::Coord segmentHit(const raytracer::Coord& point, const raytracer::Vertice& a, const raytracer::Vertice& b)
+hot static nodiscard raytracer::Coord segmentHit(const raytracer::Coord& point, const raytracer::Vertice& a, const raytracer::Vertice& b)
 {
     raytracer::Coord ab = b - a;
     raytracer::Coord ap = point - a;
@@ -364,17 +292,17 @@ hot static raytracer::Coord segmentHit(const raytracer::Coord& point, const rayt
     return (point - proj).normalize();
 }
 
-hot static raytracer::Coord triangleHit(const raytracer::Vertice& a, const raytracer::Vertice& b, const raytracer::Vertice& c)
+hot static nodiscard raytracer::Coord triangleHit(const raytracer::Vertice& a, const raytracer::Vertice& b, const raytracer::Vertice& c)
 {
     raytracer::Coord n = (b - a).cross(c - a);
     return n.normalize();
 }
 
-hot raytracer::Direction raytracer::AObject::computeHit(const raytracer::Coord& point, const raytracer::Face* facePtr) const
+hot nodiscard raytracer::Direction raytracer::AObject::computeHit(const raytracer::Coord& point, const raytracer::Face* facePtr) const
 {
-    // Check if the sdf was already computed
+    // Check if the t was already computed
     if (!facePtr) unlikely {
-        throw utils::exception::CustomException(utils::exception::Error, utils::exception::Code::InvalidAction, "Can't compute the perpendicular vector for the hit point before the sdf");
+        throw utils::exception::CustomException(utils::exception::Error, utils::exception::Code::InvalidAction, "Can't compute the perpendicular vector for the hit point before the t");
     }
 
     // Dispatch the computing
