@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 14/05/2026 by @author Tsukini
+##  @date 15/05/2026 by @author Tsukini
 
 File Name:
 ##  @file AObject.hpp
@@ -123,6 +123,7 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
     }
 
     // Compute world rotation
+    /*
     raytracer::Coord orientation = descriptor.cframe.orientation;
     raytracer::Type len = orientation.dot(orientation);
     if (len < 1e-12) orientation = {0, 0, 1}; // Fallback orientation
@@ -131,6 +132,7 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
     if (std::abs(forward.dot(worldUp)) > 0.999) worldUp = {1, 0, 0}; // Edge case, parrallel
     raytracer::Coord right = (worldUp.cross(forward)).normalize();
     raytracer::Coord up = forward.cross(right).normalize();
+    */
 
     // Get the file content
     const auto& attrib = reader.GetAttrib();
@@ -156,11 +158,13 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
                 vertice.z = attrib.vertices[3 * idx.vertex_index + 2];
 
                 // Apply rotation & offset
+                /*
                 raytracer::Coord rotated = right * vertice.x + up * vertice.y + forward * vertice.z;
                 rotated *= descriptor.scale;
                 vertice.x = rotated.x + descriptor.cframe.position.x;
                 vertice.y = rotated.y + descriptor.cframe.position.y;
                 vertice.z = rotated.z + descriptor.cframe.position.z;
+                */
                 vertice.x += descriptor.cframe.position.x;
                 vertice.y += descriptor.cframe.position.y;
                 vertice.z += descriptor.cframe.position.z;
@@ -239,7 +243,7 @@ hot static nodiscard std::optional<float> triangleCollide(const raytracer::Coord
     if (t > EPSILON) return t;
     return std::nullopt;
 }*/
-{
+/*{
     raytracer::Direction edge1 = b - a;
     raytracer::Direction edge2 = c - a;
     //const raytracer::Direction normal = edge1.cross(edge2);
@@ -257,6 +261,23 @@ hot static nodiscard std::optional<float> triangleCollide(const raytracer::Coord
     float t = inv_det * edge2.dot(s_cross_e1);
     if (t > EPSILON) return t;
     return std::nullopt;
+}*/
+{
+    raytracer::Direction edge1 = b - a;
+    raytracer::Direction edge2 = c - a;
+    raytracer::Direction h = orientation.cross(edge2);
+    float det = edge1.dot(h);
+    if (std::abs(det) < EPSILON) return std::nullopt;
+    float invDet = 1.0f / det;
+    raytracer::Direction s = point - a;
+    float u = invDet * s.dot(h);
+    if (u < 0.0f || u > 1.0f) return std::nullopt;
+    raytracer::Direction q = s.cross(edge1);
+    float v = invDet * orientation.dot(q);
+    if (v < 0.0f || (u + v) > 1.0f) return std::nullopt;
+    float t = invDet * edge2.dot(q);
+    if (t <= EPSILON) return std::nullopt;
+    return t;
 }
 
 hot nodiscard std::pair<float, const raytracer::Face*> raytracer::AObject::willCollide(const raytracer::Coord& point, const raytracer::Direction& orientation) const
