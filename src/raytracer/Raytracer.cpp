@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 14/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Raytracer.cpp
@@ -103,13 +103,18 @@ void raytracer::Raytracer::loop(sf::RenderWindow& window)
                         window.close();
                         break;
 
+                    // Reset
+                    case sf::Keyboard::R:
+                        cframe = this->_camera->getCFrameOrigin();
+                        break;
+
                     // Translation
                     case sf::Keyboard::Q:
-                        cframe.position.x -= MOVE_SPEED;
+                        cframe.position.x += MOVE_SPEED;
                         break;
 
                     case sf::Keyboard::D:
-                        cframe.position.x += MOVE_SPEED;
+                        cframe.position.x -= MOVE_SPEED;
                         break;
 
                     case sf::Keyboard::Z:
@@ -129,33 +134,34 @@ void raytracer::Raytracer::loop(sf::RenderWindow& window)
                         break;
 
                     // Rotation
-                    case sf::Keyboard::W:
-                        cframe.rotation -= ROTATE_SPEED;
-                        break;
-
-                    case sf::Keyboard::X:
-                        cframe.rotation += ROTATE_SPEED;
-                        break;
-
                     case sf::Keyboard::Left:
-                        cframe.orientation.x -= ORIENTATION_SPEED;
-                        break;
-
-                    case sf::Keyboard::Right:
-                        cframe.orientation.x += ORIENTATION_SPEED;
-                        break;
-
-                    case sf::Keyboard::Up:
                         cframe.orientation.y += ORIENTATION_SPEED;
                         break;
 
-                    case sf::Keyboard::Down:
+                    case sf::Keyboard::Right:
                         cframe.orientation.y -= ORIENTATION_SPEED;
+                        break;
+
+                    case sf::Keyboard::Up:
+                        cframe.orientation.x += ORIENTATION_SPEED;
+                        break;
+
+                    case sf::Keyboard::Down:
+                        cframe.orientation.x -= ORIENTATION_SPEED;
+                        break;
+
+                    case sf::Keyboard::W:
+                        cframe.orientation.z += ORIENTATION_SPEED;
+                        break;
+
+                    case sf::Keyboard::X:
+                        cframe.orientation.z -= ORIENTATION_SPEED;
                         break;
 
                     default: break;
                 }
-                this->_camera->setCFrame(cframe);
+                cframe.look = raytracer::toLook(cframe.orientation);
+                this->_camera->setCFrame(cframe, false);
             }
 
         }
@@ -210,8 +216,10 @@ hot void raytracer::Raytracer::display(sf::RenderWindow& window)
     ss << "(" << cframe.orientation.x;
     ss << ", " << cframe.orientation.y;
     ss << ", " << cframe.orientation.z << ")\n";
-    ss << "Rotation: ";
-    ss << cframe.rotation << " deg";
+    ss << "Look: ";
+    ss << "(" << cframe.look.x;
+    ss << ", " << cframe.look.y;
+    ss << ", " << cframe.look.z << ")";
 
     // Setup the text
     sf::Text text;
@@ -256,7 +264,7 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
     raytracer::Type distanceUnit = 0.0;
     const raytracer::IMaterial* material = nullptr;
     const raytracer::Face* faceHit = nullptr;
-    raytracer::Direction orientation;
+    raytracer::Direction look;
     raytracer::Angle angle = 0.0;
     float t = 0.0f;
 
@@ -265,10 +273,10 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
 
     for (std::size_t i = start; i < end; ++i) {
         raytracer::LightRay* ray = rays[i];
-        distanceUnit = ray->getCFrame().orientation.length();
+        distanceUnit = ray->getCFrame().look.length();
         while (ray->isAlive()) {
             // Kill those with no direction
-            if (ray->getCFrame().orientation <= 1e-8 && ray->getCFrame().orientation >= -1e-8) {
+            if (ray->getCFrame().look <= 1e-8 && ray->getCFrame().look >= -1e-8) {
                 ray->kill();
                 continue;
             }
@@ -294,7 +302,7 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
             }
 
             // 2 - Apply T (aproximative gravity curve, only in newton mode)
-            ray->translate(ray->getCFrame().orientation * t);
+            ray->translate(ray->getCFrame().look * t);
             ray->addDistance(distanceUnit * t);
 
             // Kill conditions
@@ -321,19 +329,22 @@ static hot void processLightChunk(raytracer::Raytracer& raytracer,
                 }
 
                 // Normal computing
-                orientation = ray->getCFrame().orientation;
+                look = ray->getCFrame().look;
                 nearestObject->reflectRay(ray, faceHit);
-                angle = raytracer::radToDeg(std::atan2(orientation.dot(ray->getCFrame().orientation), orientation.length() * ray->getCFrame().orientation.length()));
+                angle = raytracer::radToDeg(std::atan2(look.dot(ray->getCFrame().look), look.length() * ray->getCFrame().look.length()));
                 float localIntensityCoef = 1.0f - (angle / 180.0f); // 0° = 1.0f, 180° = 0.0f
                 nearestObject->addLightData(ray->getCFrame().position, ray->getColor(), ray->getLuminescence() * localIntensityCoef * (1.0f - material->getReflection()));
                 ray->setIntensity(ray->getIntensity() * material->getReflection());
                 ray->setColor(raytracer::mergeColor(material->getColor(), ray->getColor(), ray->getIntensity()));
 
                 // To counter collision with the same object on the next iteration
-                ray->translate(ray->getCFrame().orientation * COLLISION_COUNTER_COEF);
+                ray->translate(ray->getCFrame().look * COLLISION_COUNTER_COEF);
                 ray->setImmunity(nearestObject);
             } else { // Collision on the other side
                 nearestObject->addLightData(ray->getCFrame().position, ray->getColor(), ray->getLuminescence());
+
+                // To counter collision with the same object on the next iteration
+                ray->translate(ray->getCFrame().look * COLLISION_COUNTER_COEF);
             }
 
             // Kill conditions
@@ -374,10 +385,10 @@ static hot void processCameraChunk(raytracer::Raytracer& raytracer,
 
     for (std::size_t i = start; i < end; ++i) {
         raytracer::Ray* ray = rays[i];
-        distanceUnit = ray->getCFrame().orientation.length();
+        distanceUnit = ray->getCFrame().look.length();
         while (ray->isAlive()) {
             // Kill those with no direction
-            if (ray->getCFrame().orientation <= 1e-8 && ray->getCFrame().orientation >= -1e-8) {
+            if (ray->getCFrame().look <= 1e-8 && ray->getCFrame().look >= -1e-8) {
                 ray->kill();
                 continue;
             }
@@ -404,7 +415,7 @@ static hot void processCameraChunk(raytracer::Raytracer& raytracer,
             }
 
             // 2 - Apply T (aproximative gravity curve, only in newton mode)
-            ray->translate(ray->getCFrame().orientation * t);
+            ray->translate(ray->getCFrame().look * t);
             ray->addDistance(distanceUnit * t);
 
             // Kill conditions

@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 13/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file ARay.cpp
@@ -26,7 +26,7 @@ void raytracer::ARay::computeObjects(raytracer::Type renderDistance, const std::
     raytracer::Type renderDistanceSquared = renderDistance * renderDistance;
     raytracer::CFrame cframe = this->getCFrame();
     raytracer::Coord positionOrigin = cframe.position;
-    raytracer::Direction direction = cframe.orientation * (SPACE_CHUNK_SIZE / cframe.orientation.length());
+    raytracer::Direction direction = cframe.look * (SPACE_CHUNK_SIZE / cframe.look.length());
     raytracer::Chunk chunk;
     std::unordered_set<IObject*> seen;
     seen.reserve(objects.size());
@@ -40,7 +40,7 @@ void raytracer::ARay::computeObjects(raytracer::Type renderDistance, const std::
     // Get every object other than *.obj
     for (raytracer::IObject* object: objects) {
         if (object->getObjectDescriptor().faces.size() == 0) {
-            hit = object->willCollide(cframe.position, cframe.orientation);
+            hit = object->willCollide(cframe.position, cframe.look);
             this->_hits.push_back({object, hit.first, hit.second});
             seen.insert(object);
         }
@@ -55,7 +55,7 @@ void raytracer::ARay::computeObjects(raytracer::Type renderDistance, const std::
         if (it != objectsChunks.end()) {
             for (raytracer::IObject* object: it->second) {
                 if (!seen.insert(object).second) continue;
-                hit = object->willCollide(cframe.position, cframe.orientation);
+                hit = object->willCollide(cframe.position, cframe.look);
                 if (!hit.second) continue; // Check if it will collide in the future at least once
                 this->_hits.push_back({object, hit.first, hit.second});
             }

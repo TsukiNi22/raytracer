@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 01/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Utils.cpp
@@ -15,17 +15,17 @@ File Description:
 #include <cstddef>
 #include <cmath>
 
-nodiscard raytracer::Coord2D raytracer::rotatePoint2D(const raytracer::Coord2D& origin, const raytracer::Coord2D& point, raytracer::Angle angle)
+nodiscard raytracer::Coord2D raytracer::rotatePoint2D(const raytracer::Coord2D& origin, const raytracer::Coord2D& point, raytracer::Angle angle, const bool rad)
 {
-    raytracer::Type rad = raytracer::degToRad(angle);
+    raytracer::Type radian = rad ? angle : raytracer::degToRad(angle);
 
     // Remove the origin
     raytracer::Type x = point.x - origin.x;
     raytracer::Type y = point.y - origin.y;
 
     // Rotation
-    raytracer::Type cosR = std::cos(rad);
-    raytracer::Type sinR = std::sin(rad);
+    raytracer::Type cosR = std::cos(radian);
+    raytracer::Type sinR = std::sin(radian);
     raytracer::Type xr = x * cosR - y * sinR;
     raytracer::Type yr = x * sinR + y * cosR;
 
@@ -33,8 +33,13 @@ nodiscard raytracer::Coord2D raytracer::rotatePoint2D(const raytracer::Coord2D& 
     return {xr + origin.x, yr + origin.y};
 }
 
-nodiscard raytracer::Coord raytracer::rotatePoint3D(const raytracer::Coord& origin, const raytracer::Coord& point, raytracer::Angle angleX, raytracer::Angle angleY)
-{
+/*
+ * pitch - x
+ * yaw   - y
+ * roll  - z
+*/
+nodiscard raytracer::Coord raytracer::rotatePoint3D(const raytracer::Coord& origin, const raytracer::Coord& point, const raytracer::Direction& orientation, const bool rad)
+/*{
     // Convert to rad
     raytracer::Type radX = raytracer::degToRad(angleX);
     raytracer::Type radY = raytracer::degToRad(angleY);
@@ -60,6 +65,56 @@ nodiscard raytracer::Coord raytracer::rotatePoint3D(const raytracer::Coord& orig
 
     // Re apply the origin
     return {x2 + origin.x, y2 + origin.y, z2 + origin.z};
+}*/
+{
+    // Pre compute
+    raytracer::Coord p = point - origin;
+    raytracer::Type pitch = rad ? orientation.x : raytracer::degToRad(orientation.x);
+    raytracer::Type yaw =   rad ? orientation.y : raytracer::degToRad(orientation.y);
+    raytracer::Type roll =  rad ? orientation.z : raytracer::degToRad(orientation.z);
+
+    // Rotation value
+    raytracer::Type cosa = std::cos(yaw);
+    raytracer::Type sina = std::sin(yaw);
+
+    raytracer::Type cosb = std::cos(pitch);
+    raytracer::Type sinb = std::sin(pitch);
+    
+    raytracer::Type cosc = std::cos(roll);
+    raytracer::Type sinc = std::sin(roll);
+
+    // Create the matrix
+    raytracer::Type Axx = cosa * cosb;
+    raytracer::Type Axy = cosa * sinb * sinc - sina * cosc;
+    raytracer::Type Axz = cosa * sinb * cosc + sina * sinc;
+
+    raytracer::Type Ayx = sina * cosb;
+    raytracer::Type Ayy = sina * sinb * sinc + cosa * cosc;
+    raytracer::Type Ayz = sina * sinb * cosc - cosa * sinc;
+
+    raytracer::Type Azx = -sinb;
+    raytracer::Type Azy = cosb * sinc;
+    raytracer::Type Azz = cosb * cosc;
+
+    // Apply the matrix
+    raytracer::Type px = p.x;
+    raytracer::Type py = p.y;
+    raytracer::Type pz = p.z;
+    p.x = Axx * px + Axy * py + Axz * pz;
+    p.y = Ayx * px + Ayy * py + Ayz * pz;
+    p.z = Azx * px + Azy * py + Azz * pz;
+    return p + origin;
+}
+
+nodiscard raytracer::Direction raytracer::toLook(const raytracer::Direction& orientation)
+{
+    raytracer::Type pitch = raytracer::degToRad(orientation.x);
+    raytracer::Type yaw = raytracer::degToRad(orientation.y);
+    raytracer::Direction look;
+    look.x = std::cos(pitch) * std::sin(yaw);
+    look.y = std::sin(pitch);
+    look.z = std::cos(pitch) * std::cos(yaw);
+    return look.normalize();
 }
 
 static std::uint32_t hash_u32(std::uint32_t x)
@@ -82,7 +137,7 @@ static float hash(float x, float y, float z)
     return (h & 0xFFFFFF) / float(0xFFFFFF);
 }
 
-static float lerp(float a, float b, float t)
+static inline float lerp(float a, float b, float t)
 {
     return a + t * (b - a);
 }

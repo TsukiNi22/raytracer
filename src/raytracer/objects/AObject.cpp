@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 15/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file AObject.hpp
@@ -122,18 +122,6 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
         std::cout << e.formated() << std::endl;
     }
 
-    // Compute world rotation
-    /*
-    raytracer::Coord orientation = descriptor.cframe.orientation;
-    raytracer::Type len = orientation.dot(orientation);
-    if (len < 1e-12) orientation = {0, 0, 1}; // Fallback orientation
-    raytracer::Coord forward = orientation;
-    raytracer::Coord worldUp = {0, 1, 0};
-    if (std::abs(forward.dot(worldUp)) > 0.999) worldUp = {1, 0, 0}; // Edge case, parrallel
-    raytracer::Coord right = (worldUp.cross(forward)).normalize();
-    raytracer::Coord up = forward.cross(right).normalize();
-    */
-
     // Get the file content
     const auto& attrib = reader.GetAttrib();
     const auto& shapes = reader.GetShapes();
@@ -156,18 +144,31 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
                 vertice.x = attrib.vertices[3 * idx.vertex_index + 0];
                 vertice.y = attrib.vertices[3 * idx.vertex_index + 1];
                 vertice.z = attrib.vertices[3 * idx.vertex_index + 2];
-
-                // Apply rotation & offset
-                /*
-                raytracer::Coord rotated = right * vertice.x + up * vertice.y + forward * vertice.z;
-                rotated *= descriptor.scale;
-                vertice.x = rotated.x + descriptor.cframe.position.x;
-                vertice.y = rotated.y + descriptor.cframe.position.y;
-                vertice.z = rotated.z + descriptor.cframe.position.z;
+ 
+                /* First try of rotation
+                raytracer::Coord2D rotated = raytracer::rotatePoint2D({0.0, 0.0}, {vertice.x, vertice.y}, descriptor.cframe.orientation.z);
+                vertice.x = rotated.x;
+                vertice.y = rotated.y;
+                vertice = raytracer::rotatePoint3D({0.0, 0.0, 0.0}, vertice, descriptor.cframe.);
                 */
-                vertice.x += descriptor.cframe.position.x;
-                vertice.y += descriptor.cframe.position.y;
-                vertice.z += descriptor.cframe.position.z;
+
+                // Compute direction vectors
+                raytracer::Direction forward = descriptor.cframe.look;
+                raytracer::Direction worldUp = {0, 1, 0};
+                raytracer::Direction right = worldUp.cross(forward).normalize();
+                raytracer::Direction up = forward.cross(right);
+
+                // Roll
+                float roll = raytracer::degToRad(descriptor.cframe.orientation.z);
+                float c = std::cos(roll);
+                float s = std::sin(roll);
+                raytracer::Direction rolledRight = right * c + up * s;
+                raytracer::Direction rolledUp = -right * s + up * c;
+
+                // Apply scale & rotation & offset
+                vertice *= descriptor.scale;
+                vertice = rolledRight * vertice.x + rolledUp * vertice.y + forward * vertice.z;
+                vertice += descriptor.cframe.position;
 
                 // Min & Max
                 if (v == 0) {
@@ -204,11 +205,11 @@ cold void raytracer::AObject::loadObj(const std::string& path, raytracer::Object
 hot void raytracer::AObject::reflectRay(raytracer::IRay* ray, const raytracer::Face* face) const
 {
     raytracer::CFrame cframe = ray->getCFrame();
-    raytracer::Coord orientation = cframe.orientation;
+    raytracer::Direction look = cframe.look;
     raytracer::Coord hit = this->computeHit(cframe.position, face).normalize();
-    if (orientation.dot(hit) > 0) hit = -hit;
-    orientation = orientation - hit * (2.0 * orientation.dot(hit));
-    cframe.orientation = orientation;
+    if (look.dot(hit) > 0) hit = -hit;
+    look = look - hit * (2.0 * look.dot(hit));
+    cframe.look = look;
     ray->setCFrame(cframe, false);
 }
 

@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 14/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Struct.hpp
@@ -54,9 +54,9 @@ using Vertice = utils::vector::OVector3<raytracer::Type>;
 using Face = std::vector<Vertice>;
 
 struct CFrame {
-    raytracer::Coord position = {0.0, 0.0, 0.0};
-    raytracer::Direction orientation = {0.0, 0.0, 0.0};
-    raytracer::Angle rotation = 0.0;
+    raytracer::Coord position = {0.0, 0.0, 0.0}; // Coord
+    raytracer::Direction orientation = {0.0, 0.0, 0.0}; // Deg
+    raytracer::Direction look = {0.0, 0.0, 0.0}; // Vector normalized
     inline hot nodiscard bool operator==(const CFrame& other) const noexcept {
         return (
             position.x == other.position.x &&
@@ -64,8 +64,7 @@ struct CFrame {
             position.z == other.position.z &&
             orientation.x == other.orientation.x &&
             orientation.y == other.orientation.y &&
-            orientation.z == other.orientation.z &&
-            rotation == other.rotation
+            orientation.z == other.orientation.z
         );
     }
 };
@@ -80,8 +79,7 @@ struct CFrameHash {
         h ^= bits(cframe.position.z) * 83492791ull;
         h ^= bits(cframe.orientation.x) * 2654435761ull;
         h ^= bits(cframe.orientation.y) * 2246822519ull;
-        h ^= bits(cframe.orientation.z) * 3266489917ull;
-        return h ^ (bits(cframe.rotation) * 668265263ull);
+        return h ^ (bits(cframe.orientation.z) * 3266489917ull);
     }
 };
 
@@ -114,6 +112,7 @@ struct ChunkLightData {
 };
 
 class IMaterial;
+raytracer::Direction toLook(const raytracer::Direction& orientation);
 
 struct ObjectDescriptor {
     raytracer::Shape id = raytracer::Shape::None;
@@ -154,14 +153,7 @@ struct ObjectDescriptor {
         descriptor.cframe.orientation.x = rot[0];
         descriptor.cframe.orientation.y = rot[1];
         descriptor.cframe.orientation.z = rot[2];
-        double rotation = 0.0;
-        if (cframe.lookupValue("rotation", rotation))
-            descriptor.cframe.rotation = rotation;
-
-        // Normalize orientation (only if not null)
-        if (descriptor.cframe.orientation.x >= 1e-8 || descriptor.cframe.orientation.y >= 1e-8 || descriptor.cframe.orientation.z >= 1e-8
-            || descriptor.cframe.orientation.x <= -1e-8 || descriptor.cframe.orientation.y <= -1e-8 || descriptor.cframe.orientation.z <= -1e-8)
-            descriptor.cframe.orientation = descriptor.cframe.orientation.normalize();
+        descriptor.cframe.look = raytracer::toLook(descriptor.cframe.orientation);
 
         descriptor.cframeOrigin = descriptor.cframe;
     }

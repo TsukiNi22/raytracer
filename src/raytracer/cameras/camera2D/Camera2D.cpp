@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 14/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Camera2D.cpp
@@ -67,33 +67,30 @@ void raytracer::Camera2D::reset(void)
     raytracer::CFrame cframe = this->getCFrame();
     raytracer::Coord position = cframe.position;
     raytracer::Direction orientation = cframe.orientation;
-    raytracer::Angle rotation = -cframe.rotation;
     raytracer::Coord2D rotated;
 
     // For each rays set default light value
     for (raytracer::Ray* ray: this->_rays)
         ray->reset();
 
-    // Pre compute x & y angles
-    raytracer::Type angleY = raytracer::radToDeg(std::atan2(orientation.x, orientation.z));
-    raytracer::Type angleX = raytracer::radToDeg(std::atan2(orientation.y, std::hypot(orientation.x, orientation.z)));
-    utils::vector::OVector2<float> resolution2 = resolution / 2;
-
     // Set rays init position & orientation
+    utils::vector::OVector2<float> resolution2 = resolution / 2;
     for (int y = 0; y < resolution.y; ++y) {
         for (int x = 0; x < resolution.x; ++x) {
-            // Orientation (2D = same as the look vector)
+            // Orientation (2D = same as the origin)
             cframe.orientation = orientation;
-            // Position
+            // Look (2D = same as the origin)
+            cframe.look = cframe.look;
+           // Position
             cframe.position = position;
             cframe.position.x += (resolution2.x - x);
             cframe.position.y += (resolution2.y - y);
-            // Apply rotation
-            rotated = raytracer::rotatePoint2D({position.x, position.y}, {cframe.position.x, cframe.position.y}, rotation);
+            // Apply rotation (roll)
+            rotated = raytracer::rotatePoint2D({position.x, position.y}, {cframe.position.x, cframe.position.y}, cframe.orientation.z);
             cframe.position.x = rotated.x;
             cframe.position.y = rotated.y;
-            // Apply look vector
-            cframe.position = raytracer::rotatePoint3D(position, cframe.position, angleX, angleY);
+            // Apply rotation (pitch + yaw)
+            cframe.position = raytracer::rotatePoint3D(position, cframe.position, cframe.look);
             this->_rays[y * resolution.x + x]->setCFrame(cframe);
         }
     }

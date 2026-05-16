@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 13/05/2026 by @author Tsukini
+##  @date 15/05/2026 by @author Tsukini
 
 File Name:
 ##  @file main.cpp
@@ -62,6 +62,7 @@ static cold void printHelp()
 
     std::cout << utils::write::format("<strong>INPUT<> (only -gui)") << std::endl;
     std::cout << utils::write::color(utils::write::Color::Green) << "\tESC" << utils::write::reset() << "\tLeave the rendering" << std::endl;
+    std::cout << utils::write::color(utils::write::Color::Green) << "\tr" << utils::write::reset() << "\tReset camera position" << std::endl;
     std::cout << utils::write::color(utils::write::Color::Green) << "\tq" << utils::write::reset() << "\tTranslate camera left" << std::endl;
     std::cout << utils::write::color(utils::write::Color::Green) << "\td" << utils::write::reset() << "\tTranslate camera right" << std::endl;
     std::cout << utils::write::color(utils::write::Color::Green) << "\tz" << utils::write::reset() << "\tTranslate camera forward" << std::endl;

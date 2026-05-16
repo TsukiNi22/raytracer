@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 13/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Point.cpp
@@ -68,7 +68,6 @@ void raytracer::Point::reset(void)
     raytracer::CFrame cframe = this->getCFrame();
     raytracer::Coord position = cframe.position;
     raytracer::Direction orientation = cframe.orientation;
-    raytracer::Angle rotation = cframe.rotation;
     raytracer::Angle angleX = 0.0, angleY = 0.0;
     raytracer::Coord2D rotated;
 
@@ -83,25 +82,22 @@ void raytracer::Point::reset(void)
     // Pre compute values (360 = spherical)
     float fieldOfLightW = 360.0 * .5;
     float fieldOfLightH = (resolution.y / static_cast<float>(resolution.x)) * 360.0 * .5;
-    raytracer::Type diffAngleY = raytracer::radToDeg(std::atan2(orientation.x, orientation.z));
-    raytracer::Type diffAngleX = raytracer::radToDeg(std::atan2(orientation.y, std::hypot(orientation.x, orientation.z)));
-    utils::vector::OVector2<float> resolution2 = resolution / 2;
 
     // Set rays init position & orientation
     for (int y = 0; y < resolution.y; ++y) {
-        angleX = ((y - resolution2.y) / resolution2.y) * fieldOfLightH;
+        angleX = ((y / (resolution.y - 1.0f)) * 2.0f - 1.0f) * fieldOfLightH;
         for (int x = 0; x < resolution.x; ++x) {
-            angleY = ((x - resolution2.x) / resolution2.x) * fieldOfLightW;
+            angleY = ((x / (resolution.x - 1.0f)) * 2.0f - 1.0f) * fieldOfLightW;
             // Orientation
             cframe.orientation = orientation;
-            // Apply rotation
-            cframe.orientation = raytracer::rotatePoint3D({0.0, 0.0, 0.0}, cframe.orientation, -diffAngleX, -diffAngleY);
-            rotated = raytracer::rotatePoint2D({0.0, 0.0}, {cframe.orientation.x, cframe.orientation.y}, rotation);
-            cframe.orientation.x = rotated.x;
-            cframe.orientation.y = rotated.y;
-            cframe.orientation = raytracer::rotatePoint3D({0.0, 0.0, 0.0}, cframe.orientation, diffAngleX, diffAngleY);
-            // Apply field of view
-            cframe.orientation = raytracer::rotatePoint3D({0.0, 0.0, 0.0}, cframe.orientation, angleX, angleY);
+            cframe.orientation.x += angleX;
+            cframe.orientation.y += angleY;
+            // Look (orientation modified)
+            cframe.look = raytracer::toLook(cframe.orientation);
+            // Apply (roll)
+            rotated = raytracer::rotatePoint2D({0.0, 0.0}, {cframe.look.x, cframe.look.y}, cframe.orientation.z);
+            cframe.look.x = rotated.x;
+            cframe.look.y = rotated.y;
             // Position (FOV = same as the origin)
             cframe.position = position;
             this->_rays[y * resolution.x + x]->setCFrame(cframe);

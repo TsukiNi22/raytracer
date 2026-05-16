@@ -1,6 +1,6 @@
 /**************************************************************\
 Edition:
-##  @date 13/05/2026 by @author Tsukini
+##  @date 16/05/2026 by @author Tsukini
 
 File Name:
 ##  @file Utils.hpp
@@ -61,8 +61,9 @@ inline nodiscard raytracer::Type degToRad(raytracer::Angle deg)
 {return deg * M_PI / 180.0;};
 inline nodiscard raytracer::Angle radToDeg(raytracer::Type rad)
 {return rad / M_PI * 180.0;};
-raytracer::Coord2D rotatePoint2D(const raytracer::Coord2D& origin, const raytracer::Coord2D& point, raytracer::Angle angle);
-raytracer::Coord rotatePoint3D(const raytracer::Coord& origin, const raytracer::Coord& point, raytracer::Angle angleX, raytracer::Angle angleY);
+raytracer::Coord2D rotatePoint2D(const raytracer::Coord2D& origin, const raytracer::Coord2D& point, raytracer::Angle angle, const bool rad = false);
+raytracer::Coord rotatePoint3D(const raytracer::Coord& origin, const raytracer::Coord& point, const raytracer::Direction& orientation, const bool rad = false);
+raytracer::Direction toLook(const raytracer::Direction& orientation);
 
 } // namespace end
 #endif /* UTILS_H */
